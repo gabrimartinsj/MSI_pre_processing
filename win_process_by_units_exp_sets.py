@@ -2,7 +2,6 @@ import psycopg2
 import re
 import pandas as pd
 from sqlalchemy import create_engine
-from datetime import datetime, timedelta
 
 # Parâmetros de conexão ao banco de dados
 db_params = {
@@ -16,6 +15,7 @@ url_pattern = r'(https?://\S+)'
 
 # Crie uma lista para armazenar as linhas capturadas
 new_rows = []
+channel_id_list = []
 
 try:
     # Conectando ao banco de dados
@@ -27,57 +27,60 @@ try:
     # Exemplo de consulta SQL com paginação
     page_size = 100  # Defina o tamanho da página desejado
     offset = 0
+    example_counter = 0
 
     while True:
-        cursor.execute("SELECT * FROM messages_order_by_channel_utc_limited LIMIT %s OFFSET %s", (page_size, offset))
+        cursor.execute("SELECT * FROM messages_order_by_channel_utc LIMIT %s OFFSET %s", (page_size, offset))
         results = cursor.fetchall()
 
         if not results:
             break
 
+        if (example_counter == 10):
+            break
+
         for row in results:
-            if re.findall(url_pattern, row[3]):
+            if re.findall(url_pattern, row[3]) and row[2] not in channel_id_list:
+                if (example_counter == 10):
+                    break
+
+                channel_id_list.append(row[2])
+
                 # Imprime o conjunto encontrado
                 print("Mensagem com URL capturada")
-
                 # Adicione a linha capturada à lista de linhas
                 new_rows.append([row[2], row[3], row[4]])
 
-                # Calcule as faixas de tempo para considerar
-                start_time = row[4] - timedelta(minutes = 1)
-                end_time = row[4] + timedelta(minutes = 3)
-
-                # Imprime as mensagens dentro das faixas de tempo
-                print("Mensagens dentro da faixa de tempo em processamento:")
                 # Imprime as 5 linhas anteriores
-                print("Mensagens anteriores em processamento")
-                for i in range(results.index(row) - 1, -1, -1):
-                    if row[2] == results[i][2] and start_time <= results[i][4]:
+                print("5 linhas anteriores em processamento")
+                for i in range(max(0, results.index(row) - 5), results.index(row)):
+                    if results[i][2] == row[2]:
+                        # Adicione a linha capturada à lista de linhas
                         new_rows.append([results[i][2], results[i][3], results[i][4]])
-                    else:
-                        break
 
-                print("Mensagens posteriores em processamento")
-                for i in range(results.index(row) + 1, len(results)):
-                    if row[2] == results[i][2] and results[i][4] <= end_time:
+                # Imprime as 20 linhas seguintes
+                print("20 linhas seguintes em processamento")
+                for i in range(results.index(row) + 1, min(results.index(row) + 21, len(results))):
+                    if results[i][2] == row[2]:
+                        # Adicione a linha capturada à lista de linhas
                         new_rows.append([results[i][2], results[i][3], results[i][4]])
-                    else:
-                        break
 
                 print("\n")
+                example_counter += 1
 
         offset += page_size
 
     print('Criação do dataframe')
     # Crie um DataFrame a partir da lista de linhas
     df = pd.DataFrame(new_rows, columns = ["channel_id", "message_data", "message_utc"])
+
     # Remova as duplicatas do DataFrame, se necessário
     df = df.drop_duplicates()
 
     print('Inserção do dataframe em tabela PostgreSQL')
     # Conecte-se novamente para inserir os dados na tabela do PostgreSQL
     engine = create_engine('postgresql://postgres:Reve1945@localhost:5432/telegram2')
-    df.to_sql('messages_filtered_by_context_window_by_time', engine, if_exists = 'append', index = False)
+    df.to_sql('messages_filtered_by_context_window_experimental_set', engine, if_exists = 'append', index = True)
 
     print("\n")
     print('Fim da inserção')

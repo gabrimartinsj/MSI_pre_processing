@@ -35,61 +35,43 @@ try:
             break
 
         for row in results:
-            if re.findall(url_pattern, row[3]):
+            if re.findall(url_pattern, row[3]) and row[2] not in channel_id_list:
                 # Imprime o conjunto encontrado
-                print("Mensagem com URL:")
-                print("\n")
-                print(row[2])
-                print(row[3])
-                print(row[4])
-                print("\n")
+                print("Mensagem com URL capturada")
 
                 # Adicione a linha capturada à lista de linhas
                 new_rows.append([row[2], row[3], row[4]])
 
                 # Imprime as 5 linhas anteriores
-                print("5 linhas anteriores:")
-                print("\n")
+                print("5 linhas anteriores em processamento")
                 for i in range(max(0, results.index(row) - 5), results.index(row)):
                     if results[i][2] == row[2]:
-                        print(results[i][2])
-                        print(results[i][3])
-                        print(results[i][4])
-                        print("\n")
-
                         # Adicione a linha capturada à lista de linhas
                         new_rows.append([results[i][2], results[i][3], results[i][4]])
-                print("\n")
 
                 # Imprime as 20 linhas seguintes
-                print("20 linhas seguintes:")
-                print("\n")
+                print("20 linhas seguintes em processamento")
                 for i in range(results.index(row) + 1, min(results.index(row) + 21, len(results))):
                     if results[i][2] == row[2]:
-                        print(results[i][2])
-                        print(results[i][3])
-                        print(results[i][4])
-                        print("\n")
-
                         # Adicione a linha capturada à lista de linhas
                         new_rows.append([results[i][2], results[i][3], results[i][4]])
-                print("\n")
 
+                print("\n")        
         offset += page_size
 
+    print('Criação do dataframe')
     # Crie um DataFrame a partir da lista de linhas
     df = pd.DataFrame(new_rows, columns = ["channel_id", "message_data", "message_utc"])
-
     # Remova as duplicatas do DataFrame, se necessário
     df = df.drop_duplicates()
 
-    print("Dataframe capturado:")
-    print("\n")
-    print(df)
-
+    print('Inserção do dataframe em tabela PostgreSQL')
     # Conecte-se novamente para inserir os dados na tabela do PostgreSQL
     engine = create_engine('postgresql://postgres:Reve1945@localhost:5432/telegram2')
     df.to_sql('messages_filtered_by_context_window', engine, if_exists = 'append', index = True)
+
+    print("\n")
+    print('Fim da inserção')
 
     # Fechando o cursor
     cursor.close()
