@@ -14,9 +14,6 @@ db_params = {
 
 url_pattern = r'(https?://\S+)'
 
-# Crie uma lista para armazenar as linhas capturadas
-new_rows = []
-
 try:
     # Conectando ao banco de dados
     conn = psycopg2.connect(**db_params)
@@ -28,19 +25,24 @@ try:
     page_size = 100  # Defina o tamanho da página desejado
     offset = 0
 
+    total_messages_captured = 0  # Variável para contagem de mensagens capturadas
+
     while True:
-        cursor.execute("SELECT * FROM messages_order_by_channel_utc_limited LIMIT %s OFFSET %s", (page_size, offset))
+        cursor.execute("SELECT * FROM messages_order_by_channel_utc LIMIT %s OFFSET %s", (page_size, offset))
         results = cursor.fetchall()
 
         if not results:
             break
 
+        # Crie uma lista para armazenar as linhas capturadas na página atual
+        new_rows = []
+
         for row in results:
             if re.findall(url_pattern, row[3]):
                 # Imprime o conjunto encontrado
-                print("Mensagem com URL capturada")
+                print("Mensagem com URL capturada!")
 
-                # Adicione a linha capturada à lista de linhas
+                # Adicione a linha capturada à lista de linhas da página atual
                 new_rows.append([row[2], row[3], row[4]])
 
                 # Calcule as faixas de tempo para considerar
@@ -49,15 +51,16 @@ try:
 
                 # Imprime as mensagens dentro das faixas de tempo
                 print("Mensagens dentro da faixa de tempo em processamento:")
+
                 # Imprime as 5 linhas anteriores
-                print("Mensagens anteriores em processamento")
+                print("Mensagens anteriores em processamento...")
                 for i in range(results.index(row) - 1, -1, -1):
                     if row[2] == results[i][2] and start_time <= results[i][4]:
                         new_rows.append([results[i][2], results[i][3], results[i][4]])
                     else:
                         break
 
-                print("Mensagens posteriores em processamento")
+                print("Mensagens posteriores em processamento...")
                 for i in range(results.index(row) + 1, len(results)):
                     if row[2] == results[i][2] and results[i][4] <= end_time:
                         new_rows.append([results[i][2], results[i][3], results[i][4]])
@@ -66,21 +69,24 @@ try:
 
                 print("\n")
 
+        # Atualize a contagem de mensagens capturadas
+        total_messages_captured += len(new_rows)
+        print(f"Número de mensagens já inseridas: {total_messages_captured}")
+
+        # Crie um DataFrame a partir da lista de linhas da página atual
+        df = pd.DataFrame(new_rows, columns = ["channel_id", "message_data", "message_utc"])
+        # Remova as duplicatas do DataFrame, se necessário
+        df = df.drop_duplicates()
+
+        print('Inserindo no banco de dados...')
+        # Conecte-se novamente para inserir os dados na tabela do PostgreSQL
+        engine = create_engine('postgresql://postgres:Reve1945@localhost:5432/telegram2')
+        df.to_sql('messages_filtered_by_context_window_by_time_v2', engine, if_exists = 'append', index = False)
+
         offset += page_size
 
-    print('Criação do dataframe')
-    # Crie um DataFrame a partir da lista de linhas
-    df = pd.DataFrame(new_rows, columns = ["channel_id", "message_data", "message_utc"])
-    # Remova as duplicatas do DataFrame, se necessário
-    df = df.drop_duplicates()
-
-    print('Inserção do dataframe em tabela PostgreSQL')
-    # Conecte-se novamente para inserir os dados na tabela do PostgreSQL
-    engine = create_engine('postgresql://postgres:Reve1945@localhost:5432/telegram2')
-    df.to_sql('messages_filtered_by_context_window_by_time', engine, if_exists = 'append', index = False)
-
     print("\n")
-    print('Fim da inserção')
+    print('Fim das inserções.')
 
     # Fechando o cursor
     cursor.close()
