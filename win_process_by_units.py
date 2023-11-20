@@ -28,14 +28,14 @@ try:
     offset = 0
 
     while True:
-        cursor.execute("SELECT * FROM messages_order_by_channel_utc LIMIT %s OFFSET %s", (page_size, offset))
+        cursor.execute("SELECT * FROM messages_order_by_channel_utc_limited LIMIT %s OFFSET %s", (page_size, offset))
         results = cursor.fetchall()
 
         if not results:
             break
 
         for row in results:
-            if re.findall(url_pattern, row[3]) and row[2] not in channel_id_list:
+            if re.findall(url_pattern, row[3]):
                 # Imprime o conjunto encontrado
                 print("Mensagem com URL capturada")
 
@@ -56,7 +56,7 @@ try:
                         # Adicione a linha capturada à lista de linhas
                         new_rows.append([results[i][2], results[i][3], results[i][4]])
 
-                print("\n")        
+                print("\n")
         offset += page_size
 
     print('Criação do dataframe')
@@ -68,7 +68,7 @@ try:
     print('Inserção do dataframe em tabela PostgreSQL')
     # Conecte-se novamente para inserir os dados na tabela do PostgreSQL
     engine = create_engine('postgresql://postgres:Reve1945@localhost:5432/telegram2')
-    df.to_sql('messages_filtered_by_context_window', engine, if_exists = 'append', index = True)
+    df.to_sql('messages_filtered_by_context_window_by_units_v1', engine, if_exists = 'append', index = True)
 
     print("\n")
     print('Fim da inserção')
