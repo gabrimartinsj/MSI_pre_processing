@@ -13,6 +13,7 @@ db_params = {
 }
 
 url_pattern = r'(https?://\S+)'
+link_domains = ["youtube", "bitchute", "rumble", "odysee"]
 
 try:
     # Conectando ao banco de dados
@@ -40,39 +41,42 @@ try:
 
         for row in results:
             if re.findall(url_pattern, row[2]):
-                # Adicione a linha capturada à lista de linhas da página atual
-                new_rows.append([row[0], row[1], row[2], row[3], window_id])
+                # Verifica se a mensagem contém pelo menos uma das expressões nos links
+                if any(expression.lower() in row[2] for expression in link_domains):
+                    # Adicione a linha capturada à lista de linhas da página atual
+                    new_rows.append([row[0], row[1], row[2], row[3], window_id])
 
-                # Calcule as faixas de tempo para considerar
-                start_time = row[3] - timedelta(minutes = 1)
-                end_time = row[3] + timedelta(minutes = 3)
+                    # Calcule as faixas de tempo para considerar
+                    start_time = row[3] - timedelta(minutes = 1)
+                    end_time = row[3] + timedelta(minutes = 3)
 
-                for i in range(results.index(row) - 1, -1, -1):
-                    if row[0] == results[i][0] and start_time <= results[i][3]:
-                        new_rows.append([results[i][0], results[i][1], results[i][2],  results[i][3], window_id])
-                    else:
-                        break
+                    for i in range(results.index(row) - 1, -1, -1):
+                        if row[0] == results[i][0] and start_time <= results[i][3]:
+                            new_rows.append([results[i][0], results[i][1], results[i][2],  results[i][3], window_id])
+                        else:
+                            break
 
-                for i in range(results.index(row) + 1, len(results)):
-                    if row[0] == results[i][0] and results[i][3] <= end_time:
-                        new_rows.append([results[i][0], results[i][1], results[i][2],  results[i][3], window_id])
-                    else:
-                        break
+                    for i in range(results.index(row) + 1, len(results)):
+                        if row[0] == results[i][0] and results[i][3] <= end_time:
+                            new_rows.append([results[i][0], results[i][1], results[i][2],  results[i][3], window_id])
+                        else:
+                            break
 
-                window_id += 1
+                    window_id += 1
 
         # Atualize a contagem de mensagens capturadas
         total_messages_captured += len(new_rows)
-        print(f"Número de mensagens já capturadas: {total_messages_captured}")
+        print(f"Número de mensagens capturadas: {total_messages_captured}")
 
         # Crie um DataFrame a partir da lista de linhas da página atual
         df = pd.DataFrame(new_rows, columns = ["channel_id", "author_id", "message_data", "message_utc", "window_id"])
         # Remova as duplicatas do DataFrame, se necessário
         df = df.drop_duplicates()
+        print(f"Número de mensagens inseridas: {len(df)}")
 
         # Conecte-se novamente para inserir os dados na tabela do PostgreSQL
         engine = create_engine('postgresql://postgres:Reve1945@localhost:5432/telegram2')
-        df.to_sql('messages_filtered_by_context_window_by_time_v1_1', engine, if_exists = 'append', index = False)
+        df.to_sql('messages_filtered_by_context_window_by_time_v1_4', engine, if_exists = 'append', index = False)
 
         offset += page_size
 
